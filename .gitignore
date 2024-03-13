@@ -167,7 +167,7 @@ cython_debug/
 /pilot/gpt-pilot
 
 # workspace
-workspace
+# workspace
 pilot-env/
 
 # Other
