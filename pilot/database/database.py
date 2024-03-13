@@ -1,4 +1,5 @@
 from playhouse.shortcuts import model_to_dict
+
 from utils.style import color_yellow, color_red
 from peewee import DoesNotExist, IntegrityError
 from functools import reduce
