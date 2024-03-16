@@ -23,7 +23,7 @@ async function generateContent(prompt) {
 
     return response.data.choices[0].message.content;
   } catch (err) {
-    console.error('Error occurred with OpenAI API: ', err);
+    console.error('Error occurred with OpenAI API: ', err); // gpt_pilot_debugging_log
     console.error(err.stack);
     throw err;
   }
