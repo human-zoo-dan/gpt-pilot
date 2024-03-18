@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const winston = require('winston');
+const moment = require('moment');
 
 require('dotenv').config();
 
@@ -16,7 +17,9 @@ console.log('MongoDB connection string is:', connectionString); // gpt_pilot_deb
 console.log('DB Name is:', dbName); // gpt_pilot_debugging_log
 
 winston.loggers.add('mongodb-connection', {
-    format: winston.format.simple(),
+    format: winston.format.printf(({level, message}) => {
+        return `${moment().utc().format('YYYY-MM-DD HH:mm:ss')} - ${level}: ${message}`;
+    }),
     transports: [
         new winston.transports.Console(),
         new winston.transports.File({ filename: 'info-logs/mongodb-connection.log' })
@@ -24,29 +27,36 @@ winston.loggers.add('mongodb-connection', {
 });
 
 mongoose.connection.on('connecting', ()=> {
-  console.log('Connecting to MongoDB...');
-  winston.loggers.get('mongodb-connection').info('Connecting to MongoDB...');
+  const logMessage = 'Connecting to MongoDB...';
+  console.log(logMessage);
+  winston.loggers.get('mongodb-connection').info(logMessage);
 });
   
 mongoose.connection.on('connected', ()=> {
-  console.log('MongoDB connection established successfully.')
-  winston.loggers.get('mongodb-connection').info('MongoDB connection established successfully.')
+  const logMessage = 'MongoDB connection established successfully.';
+  console.log(logMessage);
+  winston.loggers.get('mongodb-connection').info(logMessage);
 });
 
 mongoose.connection.on('error', (error) => {
-  winston.error(`Failed to establish connection with MongoDB: ${error.message}\n ${error.stack}`);
+  const errorMessage = `Failed to establish connection with MongoDB: ${error.message}\n ${error.stack}`;
+  winston.error(errorMessage);
+
   winston.loggers.add('connection-errors', {
-    format: winston.format.simple(),
+    format: winston.format.printf(({level, message}) => {
+        return `${moment().utc().format('YYYY-MM-DD HH:mm:ss')} - ${level}: ${message}`;
+    }),
     transports: [
       new winston.transports.File({ filename: 'error-logs/connection-errors.log' })
     ]
   });
-  winston.loggers.get('connection-errors').error(error);
+  winston.loggers.get('connection-errors').error(errorMessage);
 });
   
 mongoose.connection.on('disconnected', ()=> {
-  console.log('MongoDB connection closed.')
-  winston.loggers.get('mongodb-connection').info('MongoDB connection closed.')
+  const logMessage = 'MongoDB connection closed.';
+  console.log(logMessage);
+  winston.loggers.get('mongodb-connection').info(logMessage);
 });
 
 module.exports = mongoose;

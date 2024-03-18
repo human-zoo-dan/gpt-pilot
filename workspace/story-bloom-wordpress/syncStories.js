@@ -2,7 +2,11 @@ const axios = require('axios');
 const moment = require('moment');
 const mongoose = require('./config/mongoose');
 const Story = require('./models/Story');
+const { getWpCategories } = require('./syncCategories');
 const winston = require('./winston');
+const updatedStoriesLogger = winston.loggers.get('updatedStories');
+const _ = require('lodash');
+const { validateDbStory, validateWpPostId } = require('./validation');
 require('dotenv').config();
 
 const wpUsername = process.env.STORY_BLOOM_WORDPRESS_WP_USERNAME;
@@ -16,90 +20,224 @@ const auth = {
   headers: { 'Authorization': `Basic ${token}` }
 };
 
-let allowedMethodsPosts;
+async function getWpStories() {
+  let page = 1;
+  const perPage = parseInt(process.env.STORY_SYNC_PER_PAGE) || 100;
+  let wpStories = {};
 
-async function syncStories() {
-  try {
-    const optionsStoriesRes = await axios.options(`${baseURL}/posts`, auth);
-    allowedMethodsPosts = optionsStoriesRes.headers['Access-Control-Allow-Methods'].split(', ');
-
-    console.log('Allowed methods for /posts: ', allowedMethodsPosts.join(', ')); // gpt_pilot_debugging_log
-  } catch (error) {
-    console.error('Error fetching options for /posts: ', error.message); // gpt_pilot_debugging_log
-    winston.error('Error fetching options for /posts: ', error.message); // gpt_pilot_debugging_log
-  }
-
-  try {
-    await mongoose.connect(connectionString, { dbName: dbName });
-    winston.loggers.get('index').info('MongoDB connection established successfully.');
-  } catch (error) {
-    console.error(`MongoDB connection error: ${error.message}\n${error.stack}`);
-    winston.error(`MongoDB connection error: ${error.message}\n${error.stack}`);
-    return;
-  }
-
-  const stories = await Story.find({}).exec();
-  winston.loggers.get('index').info(`Retrieved ${stories.length} stories from MongoDB.`);
-  const dbStoriesTitles = stories.map(story => story.title);
-
-  for (const dbStory of stories) {
+  while (true) {
     try {
-      const wpPosts = await axios.get(`${baseURL}/posts?search=${dbStory.title}`, auth);
-      const wpPost = wpPosts.data[0];
+      const wpStoriesRes = await axios.get(`${baseURL}/posts?page=${page}&per_page=${perPage}`, auth);
+      const wpStoriesPage = wpStoriesRes.data;
 
-      if (!wpPost) {
-        await axios.post(`${baseURL}/posts`, { title: dbStory.title, content: dbStory.plot }, auth);
-        winston.loggers.get('newStories').info(`Created new story: ${dbStory.title}`);
-      } else {
-        if (moment(dbStory.created_at).isAfter(moment(wpPost.date))) {
-          if (allowedMethodsPosts.includes('PUT')) {
-            await axios.put(`${baseURL}/posts/${wpPost.id}`, { title: dbStory.title, content: dbStory.plot }, auth); // gpt_pilot_debugging_log
-          } else if (allowedMethodsPosts.includes('POST')) {
-            await axios.post(`${baseURL}/posts/${wpPost.id}`, { title: dbStory.title, content: dbStory.plot }, auth); // gpt_pilot_debugging_log
-          }
-          winston.loggers.get('updatedStories').info(`Updated story: ${dbStory.title}`);
-        }
+      // Update wpStories before checking totalPages and breaking the loop
+      wpStories = {
+        ...wpStories,
+        ...wpStoriesPage.reduce((acc, wpStory) => {
+          acc[wpStory.title.rendered.toLowerCase()] = wpStory.id;
+          return acc;
+        }, {})
+      };
+
+      const totalPages = parseInt(wpStoriesRes.headers['x-wp-totalpages']);
+
+      console.log('Page number:', page, 'Total Pages:', totalPages); // gpt_pilot_debugging_log 
+
+      if (page >= totalPages) {
+        break;
       }
+
+      page++;
     } catch (error) {
-      console.error(`Error synchronizing story '${dbStory.title}': ${error.message}\n${error.stack}`); // gpt_pilot_debugging_log
-      winston.error(`Error synchronizing story '${dbStory.title}': ${error.message}\n${error.stack}`); // gpt_pilot_debugging_log
+      // debug logs
+      console.error('Request Details:', error.config); // gpt_pilot_debugging_log 
+      console.error('Server Response:', error.response.data); // gpt_pilot_debugging_log 
+
+      console.error(`Error fetching Stories from WordPress: ${error.message}\n ${error.stack}`); // gpt_pilot_debugging_log
+      throw error;
     }
   }
 
-  try {
-    const wpPostsRes = await axios.get(`${baseURL}/posts`, auth);
-    const wpPosts = wpPostsRes.data;
+  return wpStories;
+}
 
-    for (const wpPost of wpPosts) {
-      const wpPostTitle = wpPost.title.rendered;
-      if (!dbStoriesTitles.includes(wpPostTitle)) {
-        try {
-          if (allowedMethodsPosts.includes('DELETE')) {
-            await axios.delete(`${baseURL}/posts/${wpPost.id}?force=true`, auth); // gpt_pilot_debugging_log
-          }
-          winston.loggers.get('deletedStories').info(`Deleted story: ${wpPostTitle}`);
-        } catch (error) {
-          if (error.response && error.response.status === 404) {
-            winston.loggers.get('deletedStories').info(`Story: ${wpPostTitle} does not exist in WP.`);
-          } else {
-            console.error(`Error managing WordPress stories: ${error.message}\n${error.stack}`); // gpt_pilot_debugging_log
-            winston.error(`Error managing WordPress stories: ${error.message}\n${error.stack}`); // gpt_pilot_debugging_log
-          }
-        }
+async function getWPStoryIds() {
+  let page = 1;
+  const perPage = parseInt(process.env.STORY_SYNC_PER_PAGE) || 100;
+  let wpStoriesIds = [];
+
+  while (true) {
+    try {
+      const wpStoriesRes = await axios.get(`${baseURL}/posts?page=${page}&per_page=${perPage}`, auth);
+      const wpStoriesPage = wpStoriesRes.data;
+
+      const totalPages = parseInt(wpStoriesRes.headers['x-wp-totalpages']);
+
+      wpStoriesIds = [
+        ...wpStoriesIds,
+        ...wpStoriesPage.map((story) => story.id),
+      ];
+
+      if (page >= totalPages) {
+        break;
       }
+
+      page++;
+    } catch (error) {
+      console.error('Request Details:', error.config); 
+      console.error('Server Response:', error.response.data); 
+
+      console.error(`Error fetching Stories from WordPress: ${error.message}\n ${error.stack}`);
+      throw error;
     }
-  } catch (error) {
-    console.error(`Error managing WordPress stories: ${error.message}\n${error.stack}`); // gpt_pilot_debugging_log
-    winston.error(`Error managing WordPress stories: ${error.message}\n${error.stack}`); // gpt_pilot_debugging_log
   }
 
+  return wpStoriesIds;
+}
+
+async function getAllDbStories() {
+  let dbStories;
   try {
-    await mongoose.connection.close();
-    winston.loggers.get('index').info('MongoDB connection closed.');
+    dbStories = await Story.find({}).exec();
+    console.log('MongoDB stories fetched successfully');
+    winston.loggers.get('index').info('MongoDB stories fetched successfully');
   } catch (error) {
-    console.error(`Error closing MongoDB connection: ${error.message}\n${error.stack}`); // gpt_pilot_debugging_log
-    winston.loggers.get('index').error(`Error closing MongoDB connection: ${error.message}\n${error.stack}`); // gpt_pilot_debugging_log
+    console.error(`Error fetching stories from MongoDB: ${error.message}\n ${error.stack}`);
+    winston.error(`Error fetching stories from MongoDB: ${error.message}\n ${error.stack}`);
+    throw error;
+  }
+  return dbStories; 
+}
+
+async function deleteWPStoriesById(wpId) {
+  try {
+    validateWpPostId(wpId);
+    await axios.delete(`${baseURL}/posts/${wpId}?force=true`, auth);
+    winston.loggers.get('index').info(`Deleted Story with ID ${wpId}`);
+  } catch (error) {
+    console.error(`Error in deleting WP Story by ID: ${error.message}\n${error.stack}`);
+    winston.loggers.get('index').error(`Error in deleting WP Story by ID: ${error.message}\n${error.stack}`);
+    throw error;
   }
 }
 
-module.exports = syncStories;
+async function deleteWPStoriesMissingInDB(wpPostIds) {
+  let wpPostCount = wpPostIds.length;
+  let dbStoryCount = await Story.countDocuments();
+  
+  if (wpPostCount != dbStoryCount) {
+    const dbStories = await Story.find({});
+    const dbStoryTitles = dbStories.map(dbStory => dbStory.title);
+    
+    for (let i = 0; i < wpPostCount; i++) {
+      const wpPostTitle = wpPostIds[i];
+      if (!dbStoryTitles.includes(wpPostTitle)) {
+        await deleteWPStoriesById(wpPostTitle);
+        wpPostCount--;
+        if (wpPostCount === dbStoryCount) {
+          break;
+        }
+      }
+    }
+  }
+}
+
+async function createWPStory(dbStory) {
+  validateDbStory(dbStory);
+
+  const wpStoriesRes = await axios.get(`${baseURL}/posts?search=${encodeURIComponent(dbStory.title)}`);
+  const wpStory = wpStoriesRes.data[0];
+  
+  if (wpStory) {
+    console.log(`Story '${dbStory.title}' already exists in WordPress. Skipping creation.`); // gpt_pilot_debugging_log
+    return;
+  }
+
+  const wpCategories = await getWpCategories().catch((error) => { throw error; });
+  const categoryId = wpCategories[dbStory.category.toLowerCase()];
+
+  if(categoryId === undefined) {
+    console.error(`Category ID for '${dbStory.category}' not found in WP.`);
+    throw new Error(`Category ID for '${dbStory.category}' not found in WP.`);
+  }
+
+  await axios.post(
+    `${baseURL}/posts`, 
+    {
+      title: dbStory.title, 
+      content: dbStory.plot,
+      status: 'publish',
+      categories: [categoryId]
+    },
+    auth
+  ).catch((error) => {
+   console.error('Error during the POST request to WordPress API:', error.message);
+   throw error;
+  });
+}
+
+async function updateWPStory(dbStory, wpPostId) {
+
+  validateDbStory(dbStory);
+  validateWpPostId(wpPostId);
+
+  const wpStoriesRes = await axios.get(`${baseURL}/posts?search=${encodeURIComponent(dbStory.title)}`, auth);
+  const wpStory = wpStoriesRes.data[0];
+
+  if (wpStory && wpStory.title.rendered === dbStory.title) {
+    console.log(`Story with title '${dbStory.title}' already exists in WordPress. Skipping update.`); // gpt_pilot_debugging_log
+    return; 
+  }
+
+  const wpCategories = await getWpCategories();
+  const categoryId = wpCategories[dbStory.category.toLowerCase()];
+
+  await axios.put(`${baseURL}/posts/${wpPostId}`,
+    {
+      title: dbStory.title, 
+      content: dbStory.plot, 
+      categories: [categoryId]
+    }, auth).catch((error) => {
+      if (error.response) {
+        console.error('Axios put request error:', error.response.data);
+        throw new Error(`Axios put request error: ${error.response.data} \n${error.stack}`);
+      }
+    });
+
+  updatedStoriesLogger.info(`Updated WP Story '${dbStory.title}' with ID : ${wpPostId}`);
+}
+
+async function syncStories() {
+  try {
+    await mongoose.connect(connectionString, { dbName: dbName });
+    winston.loggers.get('index').info('MongoDB connection established successfully.');
+
+    let dbStories = await getAllDbStories();
+    let wpStories = await getWpStories().catch((error) => { throw error; });
+
+    for (const dbStory of dbStories) {
+      const wpStoryTitleLower = dbStory.title.toLowerCase();
+      if (_.includes(Object.keys(wpStories), wpStoryTitleLower)) {
+        const wpPostId = wpStories[wpStoryTitleLower];
+        await updateWPStory(dbStory, wpPostId).catch((error) => { throw error; });
+      } else {
+        await createWPStory(dbStory).catch((error) => { throw error; });
+      }
+    }
+    
+    await deleteWPStoriesMissingInDB(await getWPStoryIds());
+
+    await mongoose.connection.close();
+    winston.loggers.get('index').info('Connection to MongoDB closed.');
+  } catch (error) {
+    console.error(`Error in synchronization process: ${error.message}\n${error.stack}`);
+    winston.loggers.get('index').error(`Error in synchronization process: ${error.message} AT ${moment().utc().format('YYYY-MM-DD HH:mm:ss')}\nStack trace: ${error.stack}`);
+  }
+}
+
+module.exports = {
+  syncStories,
+  getWpStories,
+  deleteWPStoriesById,
+  deleteWPStoriesMissingInDB,
+};

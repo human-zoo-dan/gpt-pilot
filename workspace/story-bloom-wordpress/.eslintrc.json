@@ -1,0 +1,17 @@
+{
+    "env": {
+        "node": true,
+        "es6": true,
+        "mocha": true
+    },
+    "extends": "eslint:recommended",
+    "parserOptions": {
+        "ecmaVersion": 2018
+    },
+    "rules": {
+        "indent": ["error", 2],
+        "semi": ["error", "always"],
+        "no-console": "warn",
+        "comma-dangle": ["error", "never"]
+    }
+}
