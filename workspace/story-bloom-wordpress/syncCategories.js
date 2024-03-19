@@ -30,8 +30,6 @@ async function getWpCategories() {
       const wpCategoriesRes = await axios.get(`${baseURL}/categories?page=${page}&per_page=${perPage}`, auth);
       const wpCategoriesPage = wpCategoriesRes.data;
 
-      totalPages = parseInt(wpCategoriesRes.headers['x-wp-totalpages']); 
-
       if (wpCategoriesPage.length === 0) {
         break;
       }
@@ -90,31 +88,6 @@ async function syncCategories() {
       winston.error(`Error synchronizing category '${dbCategory.name}': ${error.message} AT ${moment().utc().format('YYYY-MM-DD HH:mm:ss')}\n${error.stack}`);
     }
   }
-
-  // let wpCategories;
-  // try {
-  //   const wpCategoriesRes = await axios.get(`${baseURL}/categories`, auth);
-  //   wpCategories = wpCategoriesRes.data;
-  // } catch (error) {
-  //   winston.error(`Error managing WordPress categories: ${error.message} AT ${moment().utc().format('YYYY-MM-DD HH:mm:ss')}\n${error.stack}`);
-  // }
-
-  // for (const wpCategory of wpCategories) {
-  //   let dbCategory = await Category.findOne({name: wpCategory.name}).exec();
-  //   if(!dbCategory && wpCategory.name.toLowerCase() !== 'uncategorized') {
-  //     winston.loggers.get('deletedCategories').info(`Deleting WP category '${wpCategory.name}', reason: not found in MongoDB`);
-  //     try {
-  //       await axios.delete(`${baseURL}/categories/${wpCategory.id}?force=true`, auth);
-  //       winston.loggers.get('deletedCategories').info(`Deleted category: ${wpCategory.name}`);
-  //     } catch (error) {
-  //       if (error.response && error.response.status === 404) {
-  //         winston.loggers.get('deletedCategories').info(`Category: ${wpCategory.name} does not exist in WP.`);
-  //       } else {
-  //         winston.error(`Error cleaning WordPress categories: ${error.message} AT ${moment().utc().format('YYYY-MM-DD HH:mm:ss')}\n${error.stack}`);
-  //       }
-  //     }
-  //   }
-  // }
 
   try {
     await mongoose.connection.close();

@@ -188,7 +188,7 @@ async function updateWPStory(dbStory, wpPostId) {
   const wpStory = wpStoriesRes.data[0];
 
   if (wpStory && wpStory.title.rendered === dbStory.title) {
-    console.log(`Story with title '${dbStory.title}' already exists in WordPress. Skipping update.`); // gpt_pilot_debugging_log
+    updatedStoriesLogger.info(`Story with title '${dbStory.title}' already exists in WordPress. Skipping update.`); // gpt_pilot_debugging_log
     return; 
   }
 
