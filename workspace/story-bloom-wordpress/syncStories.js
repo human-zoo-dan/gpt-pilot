@@ -109,7 +109,7 @@ async function getAllDbStories() {
     winston.error(`Error fetching stories from MongoDB: ${error.message}\n ${error.stack}`);
     throw error;
   }
-  return dbStories; 
+  return dbStories;
 }
 
 async function deleteWPStoriesById(wpId) {

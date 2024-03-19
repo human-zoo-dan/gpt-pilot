@@ -9,6 +9,9 @@ const Story = require('../models/Story');
 const axiosInstance = axios.create({ baseURL: process.env.STORY_BLOOM_WORDPRESS_WP_BASEURL });
 const { deleteWPStoriesMissingInDB, getWpStories } = require('../syncStories');
 
+const { AllHtmlEntities } = require('html-entities');
+const entities = new AllHtmlEntities();
+
 describe('syncStories Function Test', () => {
     it('Story synchronization should occur without error', (done) => {
         syncStories()
@@ -41,9 +44,9 @@ describe('createWPStory Function Test', () => {
             plot: 'New Story Plot',
             created_at: new Date()
         });
-        await new Promise(resolve => setTimeout(resolve, 5000)); // wait for 5 sec
-        const response = await axiosInstance.get(`${baseURL}/posts?search=${newStory.title}`);
-        expect(response.data[0].title).to.equal(newStory.title);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        const response = await axiosInstance.get(`${baseURL}/posts?search=${entities.encode(newStory.title)}`);
+        expect(response.data[0].title).to.equal(entities.encode(newStory.title));
     });
 });
 
@@ -53,9 +56,9 @@ describe('updateWPStory Function Test', () => {
         updatedStory.title = 'Updated Title';
         await updatedStory.save();
         await syncStories();
-        await new Promise(resolve => setTimeout(resolve, 5000)); // wait for 5 sec
-        const response = await axiosInstance.get(`${baseURL}/posts?search=${updatedStory.title}`);
-        expect(response.data[0].title).to.equal(updatedStory.title);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        const response = await axiosInstance.get(`${baseURL}/posts?search=${entities.encode(updatedStory.title)}`);
+        expect(response.data[0].title).to.equal(entities.encode(updatedStory.title));
     });
 });
 
@@ -65,7 +68,7 @@ describe('deleteWPStoriesById Function Test', () => {
         const deleteId = deleteStory.id;
         await Story.deleteOne({_id: deleteId});
         await deleteWPStoriesById(deleteId);
-        await new Promise(resolve => setTimeout(resolve, 5000)); // wait for 5 sec
+        await new Promise(resolve => setTimeout(resolve, 5000));
         const response = await axiosInstance.get(`${baseURL}/posts/${deleteId}`);
         expect(response.data).to.be.null;
     });
@@ -80,7 +83,7 @@ describe('deleteWPStoriesMissingInDB Function Test', () => {
     const wpStories = await getWpStories();
     await deleteWPStoriesMissingInDB(wpStories);
 
-    const response = await axiosInstance.get(`/posts/?search=${story.title}`);
+    const response = await axiosInstance.get(`/posts/?search=${entities.encode(story.title)}`);
     expect(response.data.length).to.equal(0);
 
     await mongoose.connection.close();

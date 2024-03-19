@@ -1,46 +1,48 @@
 # Story-Bloom-WordPress
 
-Story-Bloom-WordPress is a Node.js script designed for synchronizing data between a MongoDB database and a self-hosted WordPress instance. The script operates in a read-only mode for MongoDB but has full access to WordPress. Since the MongoDB database serves as the source of truth, the script mirrors its changes to WordPress, including creating, updating, and deleting of categories and posts.
+Story-Bloom-WordPress is a script developed in Node.js, designed to synchronize data from a MongoDB database to a self-hosted WordPress instance. The script operates in a read-only mode for MongoDB treating it as the source of truth, and applies all corresponding changes to WordPress including creating, updating, and deleting categories and posts.
 
 ## Overview
 
-The 'index.js' serves as the entrance to the application, calling 'syncStories.js' and 'syncCategories.js' scripts while handling the authentication process for the WordPress API and logging mechanisms. These scripts use a combination of Axios for HTTP requests, Mongoose for MongoDB object modeling, and Winston for logging. Error handling, data security measures and API rate limiting are in place for robust script execution.
+This script is utilizing Axios for making HTTP requests, Mongoose for MongoDB object modeling, JWT for authentication, Joi for validation, and Winston for logging. A robust error handling mechanism, data security measures, and API rate limiting are all part of the system.
 
-Separate 'models' directory files define the MongoDB schema for the 'Categories' and 'Stories' collections. Files under the 'config' directory set up Mongoose with MongoDB and Winston for different types of log outputs.
+The script works with a MongoDB database containing two collections: 'Categories' and 'Stories', and a WordPress instance with 'Categories' and 'Posts' endpoints. A one-way sync logic has been implemented where changes in MongoDB are replicated in WordPress.
 
-Finally, the '.env' file holds environment variables, which include sensitive data such as API keys and login credentials.
+The repository contains multiple directories each with their specific purposes. The 'models' directory contains files that define the MongoDB schema for both 'Categories' and 'Stories' collections. The 'config' directory is responsible for setting up Mongoose with MongoDB and Winston loggers for different levels of log outputs. An '.env' file hosts all the environment variables including API keys, database credentials, WordPress username, and password.
 
 ## Features
 
 - One-way synchronization from MongoDB to WordPress
-- Efficient handling of large datasets with comparison methods
-- Conflict resolution by deleting the conflicting WordPress item and re-uploading it from MongoDB
-- Error handling and logging mechanisms, storing full logs in a separate log file while keeping console log output compressed
+- Efficient comparison method for large data sets
+- Conflict resolution by deleting conflict item on WordPress and re-upload from MongoDB
+- Error handling and logging mechanisms
 
 ## Getting started
 
 ### Requirements
 
-- Node.js
+- Node.js 
 - A MongoDB instance
 - A self-hosted WordPress instance
 
 ### Quickstart
 
-Clone the repository and install dependencies:
+Clone the repository.
 
+```bash
     git clone <repository_url>
-    cd story-bloom-wordpress
-    npm install
+npm install
+```
+Create a '.env' file in the root directory of the project. Use the '.env.example' file as a template to fill in your environment variables.
 
-Create a '.env' file in the root directory and fill it with your environment variables using '.env.example' as a template.
+Run the script.
 
-Run the script:
-
-    npm start
+```bash
+npm start
+```
 
 ### License
 
 This project is proprietary and not open for distribution.
 
-Copyright (c) 2024.
+Copyright (c) 2024 - All rights reserved.
