@@ -20,6 +20,9 @@ const auth = {
   headers: { 'Authorization': `Basic ${token}` }
 };
 
+const { AllHtmlEntities } = require('html-entities');
+const entities = new AllHtmlEntities();
+
 async function getWpStories() {
   let page = 1;
   const perPage = parseInt(process.env.STORY_SYNC_PER_PAGE) || 100;
@@ -34,7 +37,7 @@ async function getWpStories() {
       wpStories = {
         ...wpStories,
         ...wpStoriesPage.reduce((acc, wpStory) => {
-          acc[wpStory.title.rendered.toLowerCase()] = wpStory.id;
+          acc[entities.decode(wpStory.title.rendered).toLowerCase()] = wpStory.id;
           return acc;
         }, {})
       };
@@ -149,7 +152,7 @@ async function createWPStory(dbStory) {
   const wpStory = wpStoriesRes.data[0];
   
   if (wpStory) {
-    console.log(`Story '${dbStory.title}' already exists in WordPress. Skipping creation.`); // gpt_pilot_debugging_log
+    updatedStoriesLogger.info(`Story '${dbStory.title}' already exists in WordPress. Skipping creation.`); // gpt_pilot_debugging_log
     return;
   }
 
